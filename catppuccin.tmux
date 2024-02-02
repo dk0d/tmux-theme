@@ -278,6 +278,7 @@ main() {
   set status-justify "left"
   set status-left-length "100"
   set status-right-length "100"
+
   set-option -g status-style bg="${thm_bg}"
 
   # messages
