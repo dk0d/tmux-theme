@@ -3,10 +3,10 @@
 
 # --> Catppuccin (transparent)
 thm_bg="default"
-thm_fg="#cdd6f4"
+thm_fg="#cccccc"
 thm_cyan="#7fb4ca"
 thm_black="#090618"
-thm_gray="#313244"
+thm_gray="#363646"
 thm_magenta="#957fb8"
 thm_pink="#d27e99"
 thm_red="#c34043"
