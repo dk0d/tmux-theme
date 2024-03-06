@@ -60,6 +60,69 @@ build_window_icon() {
   echo "$show_window_status"
 }
 
+build_pane_format() {
+  local number=$1
+  local color=$2
+  local background=$3
+  local text=$4
+  local fill=$5
+
+  if [ "$pane_status_enable" = "yes" ]
+  then
+    if [ "$fill" = "none" ]
+    then
+      local show_left_separator="#[fg=$thm_gray,bg=$thm_bg,nobold,nounderscore,noitalics]$pane_left_separator"
+      local show_number="#[fg=$thm_fg,bg=$thm_gray]$number"
+      local show_middle_separator="#[fg=$thm_fg,bg=$thm_gray,nobold,nounderscore,noitalics]$pane_middle_separator"
+      local show_text="#[fg=$thm_fg,bg=$thm_gray]$text"
+      local show_right_separator="#[fg=$thm_gray,bg=$thm_bg]$pane_right_separator"
+    fi
+
+    if [ "$fill" = "all" ]
+    then
+      local show_left_separator="#[fg=$color,bg=$thm_bg,nobold,nounderscore,noitalics]$pane_left_separator"
+      local show_number="#[fg=$background,bg=$color]$number"
+      local show_middle_separator="#[fg=$background,bg=$color,nobold,nounderscore,noitalics]$pane_middle_separator"
+      local show_text="#[fg=$background,bg=$color]$text"
+      local show_right_separator="#[fg=$color,bg=$thm_bg]$pane_right_separator"
+    fi
+
+    if [ "$fill" = "number" ]
+    then
+      local show_number="#[fg=$background,bg=$color]$number"
+      local show_middle_separator="#[fg=$color,bg=$background,nobold,nounderscore,noitalics]$pane_middle_separator"
+      local show_text="#[fg=$thm_fg,bg=$background]$text"
+
+      if [ "$pane_number_position" = "right" ]
+      then
+        local show_left_separator="#[fg=$background,bg=$thm_bg,nobold,nounderscore,noitalics]$pane_left_separator"
+        local show_right_separator="#[fg=$color,bg=$thm_bg]$pane_right_separator"
+      fi
+
+      if [ "$pane_number_position" = "left" ]
+      then
+        local show_right_separator="#[fg=$background,bg=$thm_bg,nobold,nounderscore,noitalics]$pane_right_separator"
+        local show_left_separator="#[fg=$color,bg=$thm_bg]$pane_left_separator"
+      fi
+
+    fi
+
+    local final_pane_format
+
+    if [ "$pane_number_position" = "right" ]
+    then
+      final_pane_format="$show_left_separator$show_text$show_middle_separator$show_number$show_right_separator"
+    fi
+
+    if [ "$pane_number_position" = "left" ]
+    then
+      final_pane_format="$show_left_separator$show_number$show_middle_separator$show_text$show_right_separator"
+    fi
+
+    echo "$final_pane_format"
+  fi
+}
+
 build_window_format() {
   local number=$1
   local color=$2
@@ -196,13 +259,12 @@ build_status_module() {
 
 load_modules() {
   local modules_list=$1
+  shift
+  local module_directories=("$@")
 
-  local modules_custom_path=$PLUGIN_DIR/custom
-  local modules_status_path=$PLUGIN_DIR/status
-  local modules_window_path=$PLUGIN_DIR/window
-
-  local module_index=0;
+  local -i module_index=0;
   local module_name
+  local module_path
   local loaded_modules
   local IN=$modules_list
 
@@ -216,36 +278,16 @@ load_modules() {
 
     module_name=$iter
 
-    local module_path=$modules_custom_path/$module_name.sh
-    source $module_path
+    for module_dir in "${module_directories[@]}" ; do
+      module_path="$module_dir/$module_name.sh"
 
-    if [ 0 -eq $? ]
-    then
-      loaded_modules="$loaded_modules$( show_$module_name $module_index )"
-      module_index=$module_index+1
-      continue
-    fi
-
-    local module_path=$modules_status_path/$module_name.sh
-    source $module_path
-
-    if [ 0 -eq $? ]
-    then
-      loaded_modules="$loaded_modules$( show_$module_name $module_index )"
-      module_index=$module_index+1
-      continue
-    fi
-
-    local module_path=$modules_window_path/$module_name.sh
-    source $module_path
-
-    if [ 0 -eq $? ]
-    then
-      loaded_modules="$loaded_modules$( show_$module_name $module_index )"
-      module_index=$module_index+1
-      continue
-    fi
-
+      if [ -r "$module_path" ]; then
+        source "$module_path"
+        loaded_modules="$loaded_modules$( "show_$module_name" "$module_index" )"
+        module_index+=1
+        break
+      fi
+    done
   done
 
   echo "$loaded_modules"
@@ -272,6 +314,13 @@ main() {
       eval "local $key"="$val"
   done < "${PLUGIN_DIR}/catppuccin-${theme}.tmuxtheme"
 
+  # module directories
+  local custom_path="$(get_tmux_option "@catppuccin_custom_plugin_dir" "${PLUGIN_DIR}/custom")"
+  local modules_custom_path=$custom_path
+  local modules_status_path=$PLUGIN_DIR/status
+  local modules_window_path=$PLUGIN_DIR/window
+  local modules_pane_path=$PLUGIN_DIR/pane
+
   # status
   set status "on"
   set status-bg "${thm_bg}"
@@ -286,8 +335,21 @@ main() {
   set message-command-style "fg=${thm_cyan},bg=${thm_gray},align=centre"
 
   # panes
-  set pane-border-style "fg=${thm_bg}"
-  set pane-active-border-style "fg=${thm_blue}"
+  local pane_status_enable=$(get_tmux_option "@catppuccin_pane_status_enabled" "no") # yes
+  local pane_border_status=$(get_tmux_option "@catppuccin_pane_border_status" "off") # bottom
+  local pane_border_style=$(get_tmux_option "@catppuccin_pane_border_style" "fg=${thm_gray}")
+  local pane_active_border_style=$(get_tmux_option "@catppuccin_pane_active_border_style" "fg=${thm_orange}")
+  local pane_left_separator=$(get_tmux_option "@catppuccin_pane_left_separator" "█")
+  local pane_middle_separator=$(get_tmux_option "@catppuccin_pane_middle_separator" "█")
+  local pane_right_separator=$(get_tmux_option "@catppuccin_pane_right_separator" "█")
+  local pane_number_position=$(get_tmux_option "@catppuccin_pane_number_position" "left") # right, left
+  local pane_format=$(load_modules "pane_default_format" "$modules_custom_path" "$modules_pane_path")
+
+  setw pane-border-status "$pane_border_status"
+  setw pane-active-border-style "$pane_active_border_style"
+  setw pane-border-style "$pane_border_style"
+  setw pane-border-format "$pane_format"
+
 
   # windows
   setw window-status-activity-style "fg=${thm_fg},bg=${thm_bg},none"
@@ -302,8 +364,8 @@ main() {
   local window_number_position=$(get_tmux_option "@catppuccin_window_number_position" "left") # right, left
   local window_status_enable=$(get_tmux_option "@catppuccin_window_status_enable" "no") # right, left
 
-  local window_format=$( load_modules "window_default_format")
-  local window_current_format=$( load_modules "window_current_format")
+  local window_format=$(load_modules "window_default_format" "$modules_custom_path" "$modules_window_path")
+  local window_current_format=$(load_modules "window_current_format" "$modules_custom_path" "$modules_window_path")
 
   setw window-status-format "$window_format"
   setw window-status-current-format "$window_current_format"
@@ -315,10 +377,10 @@ main() {
   local status_fill=$(get_tmux_option "@catppuccin_status_fill" "icon")
 
   local status_modules_right=$(get_tmux_option "@catppuccin_status_modules_right" "application session")
-  local loaded_modules_right=$( load_modules "$status_modules_right")
+  local loaded_modules_right=$(load_modules "$status_modules_right" "$modules_custom_path" "$modules_status_path")
 
   local status_modules_left=$(get_tmux_option "@catppuccin_status_modules_left" "")
-  local loaded_modules_left=$( load_modules "$status_modules_left")
+  local loaded_modules_left=$(load_modules "$status_modules_left" "$modules_custom_path" "$modules_status_path")
 
   set status-left "$loaded_modules_left"
   set status-right "$loaded_modules_right"
